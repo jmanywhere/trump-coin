@@ -1,0 +1,34 @@
+name: trump-ceo
+dependencies:
+  - name: OpenZeppelin
+    github: OpenZeppelin/openzeppelin-contracts
+    version: 4.8.2
+  - name: chainlink
+    github: smartcontractkit/chainlink-brownie-contracts
+    version: 0.6.1
+plugins:
+  - name: solidity
+  - name: hardhat
+  - name: etherscan
+  - name: bsc
+solidity:
+  optimize: True
+  import_remapping:
+    - "@openzeppelin/contracts=OpenZeppelin/4.8.2"
+    - "@chainlink/contracts=chainlink/0.6.1"
+compiler:
+  ignore_files:
+    - "*package.json"
+    - "*package-lock.json"
+    - "*tsconfig.json"
+    - "*yarn.lock"
+    - "*node_modules/*"
+    - "*README.md"
+    - "*_BUGGED_*"
+hardhat:
+  port: 8545
+  fork:
+    bsc:
+      mainnet:
+        upstream_provider: "https://bscrpc.com"
+        block_number: 26976870

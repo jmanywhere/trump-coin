@@ -1,0 +1,9 @@
+{
+  "name": "trump-ceo",
+  "version": "1.0.0",
+  "main": "index.js",
+  "license": "MIT",
+  "devDependencies": {
+    "hardhat": "^2.14.0"
+  }
+}
