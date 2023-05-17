@@ -25,7 +25,8 @@ export default {
   theme: {
     extend: {
       fontFamily:{
-        'zen': ['Zen Dots', 'sans-serif']
+        'old': ['Old Standard TT', 'serif'],
+        'spartan': ['League Spartan', 'sans-serif'],
       },
       colors: {
       }

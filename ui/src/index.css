@@ -13,7 +13,4 @@
 }
 
 @layer components{
-  .stripes-bg{
-    background: repeating-linear-gradient(315deg, #4A5A9C, #4A5A9C 40px, #DA3434 40px, #DA3434 80px, #F3F4F7 80px, #F3F4F7 120px )
-  }
 }
