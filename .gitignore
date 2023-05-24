@@ -17,3 +17,4 @@ cache/
 typechain-types/
 *.log
 .vscode/
+metadata/

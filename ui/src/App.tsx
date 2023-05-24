@@ -8,7 +8,6 @@ import { useState } from "react";
 import {
   configureChains,
   createClient,
-  erc20ABI,
   useAccount,
   useContractReads,
   useContractWrite,
@@ -21,7 +20,6 @@ import { publicProvider } from "wagmi/providers/public";
 import flag from "/america.gif";
 import logo from "/logo2.jpeg";
 import nftAbi from "./data/nftAbi";
-import priceFeedAbi from "./data/bnbPriceFeed";
 import { BigNumber, constants } from "ethers";
 import { parseEther } from "ethers/lib/utils.js";
 import classNames from "classnames";
