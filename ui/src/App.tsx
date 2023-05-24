@@ -60,7 +60,7 @@ function App() {
           <header className="w-full bg-slate-900 shadow-2xl z-10">
             <div className="container py-2 mx-auto px-4 flex flex-row items-center justify-between">
               <a
-                href="https://trumparmy.co"
+                href="https://trumpcoindtc.com/"
                 target="_blank"
                 className="text-sm md:text-2xl uppercase font-bold font-spartan text-white pt-1"
               >
