@@ -1,26 +1,27 @@
 from ape import project, reverts, Contract
 from pytest import fixture
 
-price_feed_bnb = "0x0567F2323251f0Aab15c8dFb1967E4e8A7D42aeE"
 usdt_address = "0x55d398326f99059fF775485246999027B3197955"
 
 
 @fixture
 def setup(accounts):
     owner = accounts[0]
-    nft = project.TrumpCeoNft.deploy(price_feed_bnb, 10, sender=owner)
-    feed = Contract(price_feed_bnb)
-    round_data = feed.latestRoundData()
+    nft = project.TrumpCoinNft.deploy(usdt_address, sender=owner)
     usdt = Contract(usdt_address)
     usdt_whale = accounts["0x4b16c5de96eb2117bbe5fd171e4d203624b014aa"]
-    return owner, nft, round_data, usdt, usdt_whale
+    return owner, nft, usdt, usdt_whale
 
 
 def test_activate_round(setup, accounts):
-    owner, nft, round_data, usdt, usdt_whale = setup
-    with reverts("Invalid round"):
-        nft.activateRound(0, sender=owner)
-    nft.activateRound(1, sender=owner)
+    owner, nft, *_ = setup
+    with reverts("Invalid amount"):
+        nft.activateNextRound(0, 0, 0, sender=owner)
+
+    nft.activateNextRound(300, int(1e18 * 0.5), 100, sender=owner)
+
+    with reverts("Previous round not over"):
+        nft.activateNextRound(300, int(1e18 * 0.5), 100, sender=owner)
 
     assert nft.isRoundActive(2) == False
     assert nft.isRoundActive(1) == True
@@ -29,27 +30,27 @@ def test_activate_round(setup, accounts):
 
 
 def test_mint(setup, accounts):
-    owner, nft, round_data, usdt, usdt_whale = setup
+    owner, nft, usdt, usdt_whale = setup
+
+    nft_price = int(1e18 * 0.5)
 
     mint_amount = 5
-    mint_value = int(mint_amount * 100 * (1e18) * 1e8 * 1.005 / round_data["answer"])
+    mint_value = mint_amount * nft_price
     mint_amount_2 = 4
-    mint_value_2 = int(
-        mint_amount_2 * 100 * (1e18) * 1e8 * 1.005 / round_data["answer"]
-    )
+    mint_value_2 = mint_amount_2 * nft_price
 
     user1 = accounts[1]
     user2 = accounts[2]
     # Round not started
-    with reverts("Round not started"):
-        nft.mint(False, mint_amount, sender=user1, value=mint_value)
-    nft.activateRound(1, sender=owner)
+    with reverts("Not enabled"):
+        nft.mint(mint_amount, sender=user1, value=mint_value)
+    nft.activateNextRound(300, nft_price, 100, sender=owner)
     # Successful mint
-    nft.mint(False, mint_amount, sender=user1, value=mint_value)
+    nft.mint(mint_amount, sender=user1, value=mint_value)
     assert nft.balanceOf(user1) == mint_amount
     # Mint limit
     with reverts("Exceeded mint limit"):
-        nft.mint(False, mint_amount_2, sender=user1, value=mint_value_2)
+        nft.mint(mint_amount_2, sender=user1, value=mint_value_2)
 
     assert nft.totalSupply() == mint_amount
     with reverts():
@@ -60,49 +61,46 @@ def test_mint(setup, accounts):
     assert nft.ownerOf(4) == user1.address
     assert nft.ownerOf(5) == user1.address
 
-    # usdt send from whale to user2 and approve usdt to spend by NFT
-    nft_price = 100 * int(1e18)
-    usdt.transfer(user2.address, 5 * nft_price, sender=usdt_whale)
-    usdt.approve(nft.address, 5 * nft_price, sender=user2)
-    with reverts("No ETH plz"):
-        nft.mint(True, 5, sender=user2, value=100)
-    nft.mint(True, 5, sender=user2)
     pass
 
-
 def test_mint_next_round(setup, accounts):
-    owner, nft, round_data, usdt, usdt_whale = setup
+    owner, nft, usdt, usdt_whale = setup
 
     mint_amount = 5
-    mint_value = int(mint_amount * 100 * (1e18) * 1e8 * 1.005 / round_data["answer"])
+    nft_price = int(1e18 * 0.5)
+    mint_value = mint_amount * nft_price
 
     user1 = accounts[1]
     user2 = accounts[2]
     user3 = accounts[3]
 
-    nft.activateRound(1, sender=owner)
-    nft.mint(False, mint_amount, sender=user1, value=mint_value)
-    nft.mint(False, mint_amount, sender=user2, value=mint_value)
+    nft.activateNextRound(10, nft_price, 100, sender=owner)
+    nft.mint(mint_amount, sender=user1, value=mint_value)
+    nft.mint(mint_amount, sender=user2, value=mint_value)
 
-    with reverts("Round not started"):
-        nft.mint(False, mint_amount, sender=user3, value=mint_value)
+    with reverts("Exceeded mint limit"):
+        nft.mint(mint_amount, sender=user3, value=mint_value)
 
-    nft.activateRound(2, sender=owner)
+    nft.activateNextRound(10, nft_price, 100, sender=owner)
     # Users are able to continue minting on round 2
-    nft.mint(False, mint_amount, sender=user1, value=mint_value)
-    nft.mint(False, mint_amount, sender=user2, value=mint_value)
+    nft.mint(mint_amount, sender=user1, value=mint_value)
+    nft.mint(mint_amount, sender=user2, value=mint_value)
+
+    assert nft.totalSupply() == 20
+    pass
 
 
 def test_uri(setup, accounts):
-    owner, nft, round_data, usdt, usdt_whale = setup
+    owner, nft, usdt, usdt_whale = setup
 
     mint_amount = 1
-    mint_value = int(mint_amount * 100 * (1e18) * 1e8 * 1.005 / round_data["answer"])
+    nft_price = int(1e18 * 0.5)
+    mint_value = mint_amount * nft_price
 
     user1 = accounts[1]
-    nft.activateRound(1, sender=owner)
+    nft.activateNextRound(300, nft_price, 100, sender=owner)
 
-    nft.mint(False, mint_amount, sender=user1, value=mint_value)
+    nft.mint(mint_amount, sender=user1, value=mint_value)
 
     assert nft.tokenURI(1) == ""
     nft.setHiddenURI("https://example.com", sender=owner)
@@ -111,4 +109,35 @@ def test_uri(setup, accounts):
         nft.tokenURI(0)
 
     nft.setRoundURI(1, "https://ex2.com/", sender=owner)
-    assert nft.tokenURI(1) == "https://ex2.com/1/metadata.json"
+    assert nft.tokenURI(1) == "https://ex2.com/1"
+
+
+def test_reward_distribution(setup, accounts, chain):
+    owner, nft, usdt, usdt_whale = setup
+
+    mint_amount = 1
+    nft_price = int(1e18 * 0.5)
+    mint_value = mint_amount * nft_price
+
+    user1 = accounts[1]
+
+    nft.activateNextRound(5, nft_price, 100, sender=owner)
+
+    nft.mint(mint_amount, sender=user1, value=mint_value)
+    assert nft.getPendingRewards(1) == 0
+    chain.mine(deltatime=7200)
+    current_pending = nft.getPendingRewards(1)
+    assert current_pending == 3601 * nft_price * int(310e18) // (365*24*3600 * int(1e18))
+    with reverts(nft.InsufficientRewardBalance):
+        nft.claimDividend(1, sender=user1)
+    usdt.transfer(nft.address, int(1e18), sender=usdt_whale)
+    nft.claimDividend(1, sender=user1)
+    assert nft.getPendingRewards(1) == 0
+    assert usdt.balanceOf(user1) > current_pending # Some extra seconds passed so the claimed value should be slightly higher
+    chain.mine(deltatime=4*24*3600)
+    nft.claimDividend(1, sender=user1)
+    assert usdt.balanceOf(nft.address) == 0
+    df = nft.DividendClaimed.query("event_arguments", start_block=-1).event_arguments[0]
+    # Get the data values from DataFrame df
+    assert df["amountPending"] > 0
+    pass
