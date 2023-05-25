@@ -7,7 +7,7 @@ usdt_address = "0x55d398326f99059fF775485246999027B3197955"
 @fixture
 def setup(accounts):
     owner = accounts[0]
-    nft = project.TrumpCoinNft.deploy(usdt_address, sender=owner)
+    nft = project.TrumpCoinUniverseNFT.deploy(usdt_address, sender=owner)
     usdt = Contract(usdt_address)
     usdt_whale = accounts["0x4b16c5de96eb2117bbe5fd171e4d203624b014aa"]
     return owner, nft, usdt, usdt_whale

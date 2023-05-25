@@ -10,7 +10,7 @@ import "@openzeppelin/contracts/utils/Strings.sol";
 
 error InsufficientRewardBalance();
 
-contract TrumpCoinNft is ERC721, ERC2981, Ownable, ReentrancyGuard {
+contract TrumpCoinUniverseNFT is ERC721, ERC2981, Ownable, ReentrancyGuard {
     using Strings for uint256;
     struct RoundInfo {
         uint256 price; //  this will always be in BNB
