@@ -4,11 +4,12 @@ import {
   w3mProvider,
 } from "@web3modal/ethereum";
 import { Web3Button, Web3Modal, useWeb3Modal } from "@web3modal/react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   configureChains,
   createClient,
   useAccount,
+  useContractInfiniteReads,
   useContractRead,
   useContractReads,
   useContractWrite,
@@ -22,10 +23,11 @@ import flag from "/america.gif";
 import logo from "/logo2.jpeg";
 import nftAbi from "./data/nftAbi";
 import { BigNumber, constants } from "ethers";
-import { parseEther } from "ethers/lib/utils.js";
+import { commify, formatEther, parseEther } from "ethers/lib/utils.js";
 import classNames from "classnames";
+import flatten from "lodash/flatten";
 
-const nftToken = "0xBdEaE12253b3C8869161a22D125fA565645258e8"; // TODO PENDING CHANGE
+const nftToken = "0xBdEaE12253b3C8869161a22D125fA565645258e8" as `0x${string}`; // TODO PENDING CHANGE
 
 const chains = [bsc];
 const projectId = import.meta.env.VITE_PROJECT_ID;
@@ -71,8 +73,7 @@ function App() {
             </div>
           </header>
           <div className="flex flex-col flex-grow items-center justify-center container mx-auto pb-8 gap-y-8">
-            <MintCard />
-            <OwnedCard />
+            <DataLayer />
           </div>
         </main>
       </WagmiConfig>
@@ -83,11 +84,9 @@ function App() {
 
 export default App;
 
-const MintCard = () => {
-  const [amount, setAmount] = useState<number | "">("");
-  const [loading, setLoading] = useState(false);
+const DataLayer = () => {
   const { address } = useAccount();
-  const { open } = useWeb3Modal();
+
   const { data } = useContractReads({
     contracts: [
       {
@@ -109,6 +108,94 @@ const MintCard = () => {
     ],
     watch: true,
   });
+
+  const {
+    data: owners,
+    fetchNextPage,
+    refetch,
+    isLoading,
+    isRefetching,
+  } = useContractInfiniteReads({
+    cacheKey: "ownerOfTokens",
+    contracts: (pageParam: number) => {
+      const baseParam = pageParam || 1;
+      const allRequests = 30;
+      const baseParams = {
+        abi: nftAbi,
+        address: nftToken,
+        functionName: "ownerOf",
+      };
+      const allCalls = Array.from({ length: allRequests }, (_, i) => ({
+        ...baseParams,
+        args: [baseParam + i],
+      }));
+      return allCalls;
+    },
+    getNextPageParam(_, pages) {
+      return pages.length * 20 + 1;
+    },
+    enabled: data?.[1]?.gt(0),
+  });
+  useEffect(() => {
+    if (data?.[0]?.isZero() ?? true) return;
+    const maxPages = data?.[0]?.div(30).gt(0)
+      ? data?.[0]?.div(30).add(1).toNumber()
+      : 1;
+    if (
+      (owners?.pages.length || 0) > 0 &&
+      (owners?.pages.length || 0) < maxPages
+    ) {
+      console.log("called fetch");
+      void fetchNextPage();
+    }
+  }, [fetchNextPage, owners, data]);
+
+  const ownedNFTs: number[] = useMemo(() => {
+    if (owners?.pages.length === 0 || !owners?.pages) return [] as number[];
+    const ids = (owners.pages as Array<Array<`0x${string}`>>).reduce(
+      (acc, page, pageIndex: number) => {
+        const owned: number[] = [];
+        page.map((owner, addressIndex) => {
+          if (owner === address)
+            owned.push(pageIndex * 20 + (addressIndex + 1));
+        });
+        return [...acc, ...owned];
+      },
+      [] as number[]
+    );
+    if (ids.length / 3 > 1) {
+      const tempIds: Array<number | number[]> = ids.map((id, index) => {
+        if ((index + 1) % 3 === 0) return [id, 0];
+        else return id;
+      });
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+      const flatIds: number[] = flatten<number | number[]>(tempIds) as number[];
+      return flatIds;
+    }
+    return ids;
+  }, [owners, address]);
+
+  return (
+    <>
+      <MintCard
+        totalSupply={data?.[0]?.toString() || "-"}
+        currentRound={data?.[2]?.toString() || "-"}
+      />
+      <OwnedCard
+        refresh={refetch}
+        isFetching={isLoading || isRefetching}
+        owned={ownedNFTs}
+      />
+    </>
+  );
+};
+
+const MintCard = (props: { totalSupply: string; currentRound: string }) => {
+  const { totalSupply, currentRound } = props;
+  const [amount, setAmount] = useState<number | "">("");
+  const [loading, setLoading] = useState(false);
+  const { address } = useAccount();
+  const { open } = useWeb3Modal();
 
   const { config: mintBNBConfig, error: configError } = usePrepareContractWrite(
     {
@@ -132,9 +219,7 @@ const MintCard = () => {
       enabled: !!address,
     }
   );
-  const { writeAsync: mintWithBnb, error } = useContractWrite(mintBNBConfig);
-
-  console.log({ error, configError });
+  const { writeAsync: mintWithBnb } = useContractWrite(mintBNBConfig);
 
   const parsedJsonStack = useMemo(() => {
     if (!configError?.stack) return "";
@@ -184,15 +269,11 @@ const MintCard = () => {
         </p>
         <div className="grid grid-cols-5 grid-rows-3 justify-between font-old">
           <div className="text-left col-span-3">Current Round:</div>{" "}
-          <div className=" text-accent ml-auto col-span-2">
-            {data?.[2]?.toString() || "-"}
-          </div>
+          <div className=" text-accent ml-auto col-span-2">{currentRound}</div>
           <div className="text-left col-span-3">Max Per Wallet:</div>{" "}
           <div className=" text-accent ml-auto col-span-2">5</div>
           <div className="text-left col-span-3">Total Minted:</div>{" "}
-          <div className=" text-accent ml-auto col-span-2">
-            {data?.[0]?.toString() || "-"}
-          </div>
+          <div className=" text-accent ml-auto col-span-2">{totalSupply}</div>
           <div className="text-left col-span-3">Price: </div>
           <div className=" text-accent ml-auto col-span-2">0.4 BNB</div>
         </div>
@@ -256,13 +337,68 @@ const MintCard = () => {
   );
 };
 
-const OwnedCard = () => {
+const OwnedCard = (props: {
+  refresh: () => void | Promise<unknown>;
+  owned: Array<number>;
+  isFetching?: boolean;
+}) => {
+  const { refresh, owned, isFetching } = props;
+  const { data } = useContractRead({
+    address: nftToken,
+    abi: nftAbi,
+    functionName: "getTotalPendingRewards",
+    args: [owned.map((id) => BigNumber.from(id.toString()))],
+    enabled: owned.length > 0,
+  });
+
+  const { config } = usePrepareContractWrite({
+    address: nftToken,
+    abi: nftAbi,
+    functionName: "claimMultiple",
+    args: [owned.map((id) => BigNumber.from(id.toString()))],
+    enabled: owned.length > 0,
+  });
+  const { writeAsync: claim, error } = useContractWrite(config);
+  if (owned.length == 0) return null;
   return (
     <div className="card w-96 max-w-[80%] bg-base-100 shadow-xl border-2 border-primary shadow-secondary mx-4 my-12 lg:my-0 overflow-hidden px-8 py-4">
       <div className="flex flex-row justify-between items-center pb-4">
         <h2 className="text-xl font-spartan font-bold">NFTs Owned</h2>
-        <button className="btn btn-primary btn-sm">Refresh</button>
+        <button
+          className={classNames(
+            "btn btn-primary btn-sm",
+            isFetching ? "btn-disabled" : ""
+          )}
+          onClick={refresh}
+        >
+          Refresh
+        </button>
       </div>
+      <ul className="grid grid-cols-2 gap-y-8">
+        {owned.map((id) => (
+          <li key={id}>
+            <a
+              className="link link-primary"
+              href={`https://opensea.io/assets/bsc/${nftToken}/${id}`}
+              title={`Open #${id} on OpenSea`}
+            >
+              View #{id}
+            </a>
+          </li>
+        ))}
+      </ul>
+      <div className="whitespace-pre-wrap text-center py-4">
+        Pending Rewards to Claim:{"\n"}
+        {commify(formatEther(data || BigNumber.from(0)))}
+      </div>
+      {data && data.gt(0) && (
+        <div
+          className="flex flex-row justify-center"
+          onClick={() => claim && claim()}
+        >
+          <button className="btn btn-accent ">Claim</button>
+        </div>
+      )}
     </div>
   );
 };
