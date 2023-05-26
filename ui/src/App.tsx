@@ -4,17 +4,18 @@ import {
   w3mProvider,
 } from "@web3modal/ethereum";
 import { Web3Button, Web3Modal, useWeb3Modal } from "@web3modal/react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   configureChains,
   createClient,
   useAccount,
+  useContractRead,
   useContractReads,
   useContractWrite,
   usePrepareContractWrite,
   WagmiConfig,
 } from "wagmi";
-import { mainnet } from "wagmi/chains";
+import { bsc } from "wagmi/chains";
 import { jsonRpcProvider } from "wagmi/providers/jsonRpc";
 import { publicProvider } from "wagmi/providers/public";
 import flag from "/america.gif";
@@ -24,9 +25,9 @@ import { BigNumber, constants } from "ethers";
 import { parseEther } from "ethers/lib/utils.js";
 import classNames from "classnames";
 
-const nftToken = "0xe14851B546F30062841F29bD10377aFa3B3ADA23"; // TODO PENDING CHANGE
+const nftToken = "0xBdEaE12253b3C8869161a22D125fA565645258e8"; // TODO PENDING CHANGE
 
-const chains = [mainnet];
+const chains = [bsc];
 const projectId = import.meta.env.VITE_PROJECT_ID;
 if (!projectId) {
   throw new Error("Missing NEXT_PUBLIC_PROJECT_ID");
@@ -37,7 +38,7 @@ const { provider } = configureChains(chains, [
   publicProvider(),
   jsonRpcProvider({
     rpc: (chain) => ({
-      http: chain.id == 1 ? "https://eth.public-rpc.com" : "",
+      http: chain.id == 56 ? "https://bscrpc.com" : "",
     }),
   }),
 ]);
@@ -64,13 +65,14 @@ function App() {
                 target="_blank"
                 className="text-sm md:text-2xl uppercase font-bold font-spartan text-white pt-1"
               >
-                TrumpCoin NFT
+                TrumpCoin Universe NFT
               </a>
               <Web3Button />
             </div>
           </header>
-          <div className="flex flex-col lg:flex-row flex-grow items-center justify-center container mx-auto pb-8">
+          <div className="flex flex-col flex-grow items-center justify-center container mx-auto pb-8 gap-y-8">
             <MintCard />
+            <OwnedCard />
           </div>
         </main>
       </WagmiConfig>
@@ -99,46 +101,76 @@ const MintCard = () => {
         functionName: "balanceOf",
         args: [address || constants.AddressZero],
       },
+      {
+        address: nftToken,
+        abi: nftAbi,
+        functionName: "currentRound",
+      },
     ],
     watch: true,
   });
 
-  const { config: mintBNBConfig } = usePrepareContractWrite({
-    address: nftToken,
-    abi: nftAbi,
-    functionName: "mint",
-    args: [
-      false,
-      BigNumber.from(
-        isNaN(parseInt(amount.toString())) ? "0" : amount.toString()
-      ),
-    ],
-    overrides: {
-      value:
-        (data &&
+  const { config: mintBNBConfig, error: configError } = usePrepareContractWrite(
+    {
+      address: nftToken,
+      abi: nftAbi,
+      functionName: "mint",
+      args: [
+        BigNumber.from(
+          isNaN(parseInt(amount.toString())) ? "0" : amount.toString()
+        ),
+      ],
+      overrides: {
+        value:
           parseEther(
             BigNumber.from(
               isNaN(parseInt(amount.toString())) ? "0" : amount.toString()
             ).toString()
-          )
-            .mul(100) // price
-            .mul(1005) // need .05% extra due to volatility of price
-            .div(1000)) || // divide to the .05% wiggle room // divide by price to get approx bnb price
-        0,
-    },
-    enabled: !!address,
-  });
-  const { writeAsync: mintWithBnb } = useContractWrite(mintBNBConfig);
+          ).mul(parseEther("0.4")) || // divide to the .05% wiggle room // divide by price to get approx bnb price
+          0,
+      },
+      enabled: !!address,
+    }
+  );
+  const { writeAsync: mintWithBnb, error } = useContractWrite(mintBNBConfig);
 
+  console.log({ error, configError });
+
+  const parsedJsonStack = useMemo(() => {
+    if (!configError?.stack) return "";
+    const startIndex = configError.stack.indexOf("{");
+    const endIndex = configError.stack.lastIndexOf("}");
+    if (startIndex !== -1 && endIndex !== -1) {
+      const jsonString = configError.stack.substring(startIndex, endIndex + 1);
+
+      try {
+        const jsonObject = JSON.parse(jsonString);
+        const actualError = jsonObject?.data?.message;
+        const cutMsgIndex = actualError?.indexOf("*") ?? -1;
+        if (cutMsgIndex == -1) {
+          return actualError || "";
+        }
+        return actualError.substring(0, cutMsgIndex) || "";
+      } catch (error) {
+        console.error("Error parsing JSON:", error);
+        return "";
+      }
+    } else {
+      console.error("JSON object not found in the string.");
+      return "";
+    }
+  }, [configError]);
   return (
     <div className="card w-96 max-w-[80%] bg-base-100 shadow-xl border-2 border-primary shadow-secondary mx-4 my-12 lg:my-0 overflow-hidden">
       <div className="card-body px-0 pt-0 items-center text-center ">
-        <h1 className="text-accent card-title font-spartan text-2xl bg-black/90 w-full flex flex-row items-center justify-center py-6">
-          <div className="rounded-full overflow-hidden">
+        <h1 className="text-accent card-title font-spartan text-2xl bg-black/90 w-full flex flex-row items-center justify-center py-6 px-4">
+          <div className="rounded-full overflow-hidden w-[80px] h-[80px]">
             <img src={logo} className="w-[80px] h-[80px]" />
           </div>
-          <div className="text-white/90">NFT Minting</div>
-          <div className="rounded-full overflow-hidden">
+          <div className="text-white/90 whitespace-pre-wrap text-center">
+            TrumpCoin{"\n"}Universe
+          </div>
+          <div className="rounded-full overflow-hidden w-[80px] h-[80px]">
             <img src={logo} className="w-[80px] h-[80px]" />
           </div>
         </h1>
@@ -152,7 +184,9 @@ const MintCard = () => {
         </p>
         <div className="grid grid-cols-5 grid-rows-3 justify-between font-old">
           <div className="text-left col-span-3">Current Round:</div>{" "}
-          <div className=" text-accent ml-auto col-span-2">1</div>
+          <div className=" text-accent ml-auto col-span-2">
+            {data?.[2]?.toString() || "-"}
+          </div>
           <div className="text-left col-span-3">Max Per Wallet:</div>{" "}
           <div className=" text-accent ml-auto col-span-2">5</div>
           <div className="text-left col-span-3">Total Minted:</div>{" "}
@@ -160,7 +194,7 @@ const MintCard = () => {
             {data?.[0]?.toString() || "-"}
           </div>
           <div className="text-left col-span-3">Price: </div>
-          <div className=" text-accent ml-auto col-span-2">{"VALUE"} ETH</div>
+          <div className=" text-accent ml-auto col-span-2">0.4 BNB</div>
         </div>
         <input
           type="number"
@@ -178,6 +212,17 @@ const MintCard = () => {
           }}
           className="input w-60 input-bordered input-primary "
         />
+        {configError && typeof amount == "number" && amount > 0 && (
+          <div className="text-error text-center text-xs">
+            {
+              // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+              //@ts-ignore
+              configError.error?.data?.message ||
+                parsedJsonStack ||
+                "Something wrong"
+            }
+          </div>
+        )}
         <div className="card-actions justify-center pt-4">
           <button
             className={classNames(
@@ -206,6 +251,17 @@ const MintCard = () => {
             Mint
           </button>
         </div>
+      </div>
+    </div>
+  );
+};
+
+const OwnedCard = () => {
+  return (
+    <div className="card w-96 max-w-[80%] bg-base-100 shadow-xl border-2 border-primary shadow-secondary mx-4 my-12 lg:my-0 overflow-hidden px-8 py-4">
+      <div className="flex flex-row justify-between items-center pb-4">
+        <h2 className="text-xl font-spartan font-bold">NFTs Owned</h2>
+        <button className="btn btn-primary btn-sm">Refresh</button>
       </div>
     </div>
   );
