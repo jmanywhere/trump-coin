@@ -358,7 +358,7 @@ const OwnedCard = (props: {
     args: [owned.map((id) => BigNumber.from(id.toString()))],
     enabled: owned.length > 0,
   });
-  const { writeAsync: claim, error } = useContractWrite(config);
+  const { writeAsync: claim } = useContractWrite(config);
   if (owned.length == 0) return null;
   return (
     <div className="card w-96 max-w-[80%] bg-base-100 shadow-xl border-2 border-primary shadow-secondary mx-4 my-12 lg:my-0 overflow-hidden px-8 py-4">
